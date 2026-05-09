@@ -1,5 +1,3 @@
-awsec2.tf  instance.yml  terraform.tfstate  terraform.tfstate.backup
-sz@DESKTOP-9UQE46U:~/terraform$ cat awsec2.tf
 provider "aws" {
 region = "us-east-1"
 }
