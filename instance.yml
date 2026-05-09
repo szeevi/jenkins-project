@@ -1,0 +1,37 @@
+---
+- name: integration of terraform and ansible
+  hosts: all
+  become: true  # Added this because installing packages usually requires sudo
+
+  tasks:
+    - name: installing httpd
+      package:
+        name: httpd
+        state: present
+
+    - name: installing php
+      package:
+        name: php
+        state: present
+
+    - name: starting httpd service
+      service:
+        name: httpd
+        state: started
+        enabled: true  # Good practice to ensure it starts on boot
+
+    - name: installing git
+      package:
+        name: git
+        state: present
+
+    - name: making folder
+      file:
+        path: /var/www/html/web
+        state: directory
+        mode: '0755' # Good practice to set permissions
+
+    - name: cloning git repo
+      ansible.builtin.git:
+        repo: "https://github.com/ishajain140/index_files.git/"
+        dest: /var/www/html/web
