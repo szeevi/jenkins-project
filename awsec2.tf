@@ -11,3 +11,4 @@ vpc_security_group_ids = ["sg-00ef03cc35ddaa39c"]
 tags = {
     Name = "TerraformOS"
 }
+}
