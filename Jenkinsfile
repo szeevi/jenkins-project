@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
-        # פתרון לבעיית ה-SSH בחיבור ראשון
+        // שימוש בשיקוף קו נטוי כפול עבור הערות ב-Jenkinsfile
         ANSIBLE_HOST_KEY_CHECKING = 'False'
     }
 
@@ -33,12 +33,11 @@ pipeline {
         stage('Run Ansible Playbook') {
             steps {
                 script {
-                    // חילוץ ה-IP ויצירת קובץ אינוונטורי בפורמט שאנסיבל מבין
+                    // חילוץ ה-IP ויצירת קובץ אינוונטורי
                     def instanceIp = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
                     sh "echo '${instanceIp} ansible_user=ec2-user' > inventory.ini"
                     
-                    // הרצת הפלייבוק עם הקובץ החדש
-                    // הערה: אם יש לך מפתח PEM, הוסף אותו כאן עם --private-key
+                    // הרצת הפלייבוק. שים לב שייתכן ותצטרך להוסיף --private-key אם אין מפתח מוגדר ב-Agent
                     sh "ansible-playbook -i inventory.ini instance.yml"
                 }
             }
