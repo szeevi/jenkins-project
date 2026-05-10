@@ -2,8 +2,8 @@ pipeline {
     agent any
     
     environment {
-        // ג'נקינס יזריק את המפתחות למשתני הסביבה שטרפורם מחפש
-        AWS_ACCESS_KEY_ID     = credentials('aws-creds-id') // ה-ID שנתת ב-Jenkins
+        // וודא שה-ID כאן תואם למה שהגדרת ב-Jenkins!
+        AWS_ACCESS_KEY_ID     = credentials('aws-creds-id') 
         AWS_SECRET_ACCESS_KEY = credentials('aws-creds-secret')
         AWS_DEFAULT_REGION    = 'us-east-1'
     }
@@ -26,14 +26,15 @@ pipeline {
                 sh 'terraform apply -auto-approve'
             }
         }
-
-        // ... שאר השלבים
     }
-    
+
+    // ה-post נמצא כאן, והוא ירוץ בתוך ה-Context של ה-agent
     post {
-        always {
-            echo 'Cleaning up workspace...'
-            deleteDir()
+        success {
+            echo 'Infrastructure deployed successfully!'
+        }
+        failure {
+            echo 'Deployment failed. Check the logs above.'
         }
     }
 }
