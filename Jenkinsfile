@@ -2,8 +2,9 @@ pipeline {
     agent any
 
     environment {
-        // הגדרת האזור כברירת מחדל
         AWS_DEFAULT_REGION = 'us-east-1'
+        # פתרון לבעיית ה-SSH בחיבור ראשון
+        ANSIBLE_HOST_KEY_CHECKING = 'False'
     }
 
     stages {
@@ -21,7 +22,6 @@ pipeline {
 
         stage('Terraform Apply') {
             steps {
-                // שימוש בבלוק המאובטח להזרקת המפתחות (אחרי שעדכנת אותם ב-Jenkins)
                 withCredentials([usernamePassword(credentialsId: 'aws-credentials-global', 
                                                  passwordVariable: 'AWS_SECRET_ACCESS_KEY', 
                                                  usernameVariable: 'AWS_ACCESS_KEY_ID')]) {
@@ -33,13 +33,13 @@ pipeline {
         stage('Run Ansible Playbook') {
             steps {
                 script {
-                    // 1. חילוץ ה-IP של השרת החדש מטרפורם (בהנחה שהגדרת output "instance_ip" ב-TF)
-                    // אם לא הגדרת output, תוכל להשתמש בנתיב הישיר לקובץ ה-inventory שלך
-                    sh 'terraform output -raw instance_ip > instance_ip.txt'
+                    // חילוץ ה-IP ויצירת קובץ אינוונטורי בפורמט שאנסיבל מבין
+                    def instanceIp = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
+                    sh "echo '${instanceIp} ansible_user=ec2-user' > inventory.ini"
                     
-                    // 2. הרצת הפלייבוק
-                    // הערה: וודא שיש ל-Jenkins מפתח SSH (Private Key) כדי להתחבר לשרת ה-EC2
-                    sh 'ansible-playbook -i instance_ip.txt instance.yml'
+                    // הרצת הפלייבוק עם הקובץ החדש
+                    // הערה: אם יש לך מפתח PEM, הוסף אותו כאן עם --private-key
+                    sh "ansible-playbook -i inventory.ini instance.yml"
                 }
             }
         }
@@ -48,12 +48,6 @@ pipeline {
     post {
         always {
             echo 'Finishing pipeline execution...'
-        }
-        success {
-            echo 'Infrastructure deployed and configured successfully!'
-        }
-        failure {
-            echo 'Pipeline failed. Please check the AWS credentials or Terraform/Ansible logs.'
         }
     }
 }
