@@ -31,21 +31,22 @@ pipeline {
         stage('Run Ansible Playbook') {
             steps {
                 script {
-                    // 1. שליפת ה-IP
                     def instanceIp = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
                     
                     echo "Waiting for SSH to be ready on ${instanceIp}..."
                     sleep 30 
                     
-                    // 2. יצירת קובץ אינוונטורי בצורה בטוחה (Native Jenkins step)
-                    // שיטה זו מבטיחה ירידת שורה תקינה ופורמט INI מושלם
-                    writeFile file: 'inventory_fixed.ini', text: "[all]\n${instanceIp}"
+                    // יצירת קובץ אינוונטורי פשוט מאוד ללא כותרות
+                    writeFile file: 'inventory_fixed.ini', text: "${instanceIp}"
                     
-                    // 3. בדיקה ויזואלית ב-Log לראות שהקובץ נוצר תקין
-                    sh "cat inventory_fixed.ini"
-                    
-                    // 4. הרצת ה-Playbook
-                    sh "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -v -i inventory_fixed.ini instance.yml"
+                    // הרצת הפלייבוק עם הגדרות כפויות
+                    // 1. ANSIBLE_CONFIG מבטיח שימוש בהגדרות שלך
+                    // 2. הפסיק אחרי שם הקובץ לפעמים עוזר לאנסיבל להבין שזה קובץ סטטי
+                    sh """
+                        export ANSIBLE_CONFIG=./ansible.cfg
+                        export ANSIBLE_HOST_KEY_CHECKING=False
+                        ansible-playbook -v -i inventory_fixed.ini instance.yml
+                    """
                 }
             }
         }
