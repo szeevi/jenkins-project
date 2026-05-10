@@ -8,15 +8,14 @@ resource "aws_instance" "terraform_demo" {
   availability_zone      = "us-east-1c"
   vpc_security_group_ids = ["sg-00ef03cc35ddaa39c"]
   
-  # חשוב: שנה את זה לשם של ה-Key Pair שלך ב-AWS כדי שתוכל להתחבר ב-SSH
-  key_name               = "my-aws-key" 
+  # שינוי השם לפי מה שקיים אצלך ב-AWS Console
+  key_name               = "newkey" 
 
   tags = {
     Name = "TerraformOS"
   }
 }
 
-# ה-Output שה-Jenkinsfile מחפש
 output "instance_ip" {
   value = aws_instance.terraform_demo.public_ip
 }
