@@ -8,7 +8,6 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                // מוריד את הקוד מה-Repository (כולל ה-Playbook וה-cfg)
                 checkout scm
             }
         }
@@ -21,7 +20,6 @@ pipeline {
 
         stage('Terraform Apply') {
             steps {
-                // שימוש ב-Credentials שהגדרת ב-Jenkins (aws-credentials-global)
                 withCredentials([usernamePassword(credentialsId: 'aws-credentials-global', 
                                                  passwordVariable: 'AWS_SECRET_ACCESS_KEY', 
                                                  usernameVariable: 'AWS_ACCESS_KEY_ID')]) {
@@ -33,19 +31,21 @@ pipeline {
         stage('Run Ansible Playbook') {
             steps {
                 script {
-                    // 1. שליפת ה-IP מתוך ה-Output של טרפורם
+                    // 1. שליפת ה-IP
                     def instanceIp = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
                     
                     echo "Waiting for SSH to be ready on ${instanceIp}..."
-                    sleep 30 // המתנה של 30 שניות כדי לוודא שה-SSH במכונה למעלה
+                    sleep 30 
                     
-                    // 2. יצירת קובץ אינוונטורי תקני בפורמט INI
-                    // זה פותר את בעיית ה-Unable to parse שראינו קודם
-                    sh "echo '[all]\n${instanceIp}' > inventory_fixed.ini"
+                    // 2. יצירת קובץ אינוונטורי בצורה בטוחה (Native Jenkins step)
+                    // שיטה זו מבטיחה ירידת שורה תקינה ופורמט INI מושלם
+                    writeFile file: 'inventory_fixed.ini', text: "[all]\n${instanceIp}"
                     
-                    // 3. הרצת ה-Playbook
-                    // אנחנו מוסיפים דריסה ל-Host Key Checking כדי למנוע תקיעה בחיבור ראשון
-                    sh "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i inventory_fixed.ini instance.yml"
+                    // 3. בדיקה ויזואלית ב-Log לראות שהקובץ נוצר תקין
+                    sh "cat inventory_fixed.ini"
+                    
+                    // 4. הרצת ה-Playbook
+                    sh "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -v -i inventory_fixed.ini instance.yml"
                 }
             }
         }
@@ -54,7 +54,6 @@ pipeline {
     post {
         success {
             script {
-                // הדפסת פרטי הגישה בצורה ברורה בסוף ה-Console
                 def finalIp = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
                 echo "-----------------------------------------------------------"
                 echo "DEPLOYMENT SUCCESSFUL!"
@@ -64,7 +63,6 @@ pipeline {
             }
         }
         always {
-            // ניקוי הקובץ הזמני
             sh 'rm -f inventory_fixed.ini'
         }
     }
