@@ -1,26 +1,57 @@
 pipeline {
     agent any
+    
+    // מאפשר לבחור בין הקמה למחיקה בהרצה ידנית (Build with Parameters)
+    parameters {
+        choice(name: 'ACTION', choices: ['apply', 'destroy'], description: 'בחר האם להקים או למחוק את התשתית')
+    }
+
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
     }
+
     stages {
-        stage('Checkout') { steps { checkout scm } }
-        stage('Terraform Init') { steps { sh 'terraform init' } }
-        stage('Terraform Apply') {
+        stage('Checkout') {
+            steps {
+                // מוריד את הקוד מה-Repository
+                checkout scm
+            }
+        }
+        
+        stage('Terraform Init') {
+            steps {
+                sh 'terraform init'
+            }
+        }
+
+        stage('Terraform Action') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'aws-credentials-global', 
                                                  passwordVariable: 'AWS_SECRET_ACCESS_KEY', 
                                                  usernameVariable: 'AWS_ACCESS_KEY_ID')]) {
-                    sh 'terraform apply -auto-approve'
+                    script {
+                        if (params.ACTION == 'apply') {
+                            sh 'terraform apply -auto-approve'
+                        } else {
+                            sh 'terraform destroy -auto-approve'
+                        }
+                    }
                 }
             }
         }
+
         stage('Run Ansible Playbook') {
+            // השלב הזה ירוץ רק אם בחרנו להקים את המכונה (apply)
+            when { expression { params.ACTION == 'apply' } }
             steps {
                 script {
+                    // שליפת ה-IP מטרפורם
                     def instanceIp = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
+                    
+                    // יצירת קובץ אינוונטורי זמני
                     writeFile file: 'inventory_fixed.ini', text: "[all]\n${instanceIp}"
                     
+                    // הרצת Ansible עם המפתח מה-Credentials
                     withCredentials([sshUserPrivateKey(credentialsId: 'aws-ssh-key', 
                                                      keyFileVariable: 'SSH_KEY', 
                                                      usernameVariable: 'SSH_USER')]) {
@@ -36,19 +67,27 @@ pipeline {
             }
         }
     }
+
     post {
         success {
             script {
-                // שליפה של ה-IP לצורך התצוגה בסוף
-                def finalIp = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
-                echo "-----------------------------------------------------------"
-                echo "DEPLOYMENT SUCCESSFUL!"
-                echo "New VM IP Address: ${finalIp}"
-                echo "Web URL: http://${finalIp}/web/index.php"
-                echo "-----------------------------------------------------------"
+                // הצגת הכתובת רק אם המכונה הוקמה בהצלחה
+                if (params.ACTION == 'apply') {
+                    def finalIp = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
+                    echo "-----------------------------------------------------------"
+                    echo "DEPLOYMENT SUCCESSFUL!"
+                    echo "New VM IP Address: ${finalIp}"
+                    echo "Web URL: http://${finalIp}/web/index.php"
+                    echo "-----------------------------------------------------------"
+                } else {
+                    echo "-----------------------------------------------------------"
+                    echo "INFRASTRUCTURE DESTROYED SUCCESSFULLY"
+                    echo "-----------------------------------------------------------"
+                }
             }
         }
         always {
+            // ניקוי קבצים זמניים
             sh 'rm -f inventory_fixed.ini'
         }
     }
