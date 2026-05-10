@@ -1,23 +1,11 @@
 pipeline {
     agent any
-
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
     }
-
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Terraform Init') {
-            steps {
-                sh 'terraform init'
-            }
-        }
-
+        stage('Checkout') { steps { checkout scm } }
+        stage('Terraform Init') { steps { sh 'terraform init' } }
         stage('Terraform Apply') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'aws-credentials-global', 
@@ -27,44 +15,32 @@ pipeline {
                 }
             }
         }
-
         stage('Run Ansible Playbook') {
             steps {
                 script {
                     def instanceIp = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
+                    echo "Provisioning host: ${instanceIp}"
                     
-                    echo "Waiting for SSH to be ready on ${instanceIp}..."
-                    sleep 30 
-                    
-                    // יצירת קובץ אינוונטורי פשוט מאוד ללא כותרות
                     writeFile file: 'inventory_fixed.ini', text: "${instanceIp}"
                     
-                    // הרצת הפלייבוק עם הגדרות כפויות
-                    // 1. ANSIBLE_CONFIG מבטיח שימוש בהגדרות שלך
-                    // 2. הפסיק אחרי שם הקובץ לפעמים עוזר לאנסיבל להבין שזה קובץ סטטי
-                    sh """
-                        export ANSIBLE_CONFIG=./ansible.cfg
-                        export ANSIBLE_HOST_KEY_CHECKING=False
-                        ansible-playbook -v -i inventory_fixed.ini instance.yml
-                    """
+                    // שימוש ב-SSH Agent כדי להזריק את המפתח מה-Credentials
+                    sshagent(['aws-ssh-key']) {
+                        sh """
+                            export ANSIBLE_CONFIG=./ansible.cfg
+                            export ANSIBLE_HOST_KEY_CHECKING=False
+                            ansible-playbook -v -i inventory_fixed.ini instance.yml
+                        """
+                    }
                 }
             }
         }
     }
-
     post {
         success {
             script {
                 def finalIp = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
-                echo "-----------------------------------------------------------"
-                echo "DEPLOYMENT SUCCESSFUL!"
-                echo "New VM IP Address: ${finalIp}"
-                echo "Web URL: http://${finalIp}/web"
-                echo "-----------------------------------------------------------"
+                echo "Success! URL: http://${finalIp}/web"
             }
-        }
-        always {
-            sh 'rm -f inventory_fixed.ini'
         }
     }
 }
