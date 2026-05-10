@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
-        // אנחנו משתמשים בהגדרה מה-ansible.cfg שלך, אז אין צורך ב-ANSIBLE_HOST_KEY_CHECKING כאן
     }
 
     stages {
@@ -32,14 +31,15 @@ pipeline {
         stage('Run Ansible Playbook') {
             steps {
                 script {
-                    // 1. שליפת ה-IP מטרפורם
+                    // שליפת ה-IP מטרפורם
                     def instanceIp = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
                     
-                    // 2. יצירת קובץ אינוונטורי זמני (כי ה-ansible.cfg שלך מצפה ל-aws_ec2.yaml כברירת מחדל)
+                    // יצירת קובץ אינוונטורי זמני
                     sh "echo '${instanceIp}' > host_to_provision.txt"
                     
-                    // 3. הרצת הפלייבוק
-                    // אנחנו דורסים את ה-inventory של ה-cfg רק לרגע זה כדי להשתמש ב-IP החדש
+                    // הרצת הפלייבוק
+                    // שים לב: השתמשתי בנתיב המלא למפתח כפי שמופיע אצלך ב-cfg. 
+                    // אם זה נכשל על Permission Denied, נצטרך להעביר את המפתח ל-Jenkins Credentials.
                     sh "ansible-playbook -i host_to_provision.txt instance.yml"
                 }
             }
@@ -47,8 +47,17 @@ pipeline {
     }
 
     post {
+        success {
+            script {
+                def finalIp = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
+                echo "-----------------------------------------------------------"
+                echo "DEPLOYMENT SUCCESSFUL!"
+                echo "New VM IP Address: ${finalIp}"
+                echo "Web URL: http://${finalIp}/web"
+                echo "-----------------------------------------------------------"
+            }
+        }
         always {
-            echo 'Cleaning up...'
             sh 'rm -f host_to_provision.txt'
         }
     }
