@@ -2,10 +2,8 @@ pipeline {
     agent any
     
     environment {
-        // וודא שה-ID כאן תואם למה שהגדרת ב-Jenkins!
-        AWS_ACCESS_KEY_ID     = credentials('aws-creds-id') 
-        AWS_SECRET_ACCESS_KEY = credentials('aws-creds-secret')
-        AWS_DEFAULT_REGION    = 'us-east-1'
+        // ג'נקינס יודע לקחת את ה-Username וה-Password מה-ID האחד שנתת
+        AWS_CREDS = credentials('aws-credentials-global')
     }
 
     stages {
@@ -16,25 +14,30 @@ pipeline {
         }
 
         stage('Terraform Init') {
+            environment {
+                // הזרקת המפתחות למשתנים שטרפורם מזהה
+                AWS_ACCESS_KEY_ID     = "${AWS_CREDS_USR}"
+                AWS_SECRET_ACCESS_KEY = "${AWS_CREDS_PSW}"
+            }
             steps {
                 sh 'terraform init'
             }
         }
 
         stage('Terraform Apply') {
+            environment {
+                AWS_ACCESS_KEY_ID     = "${AWS_CREDS_USR}"
+                AWS_SECRET_ACCESS_KEY = "${AWS_CREDS_PSW}"
+            }
             steps {
                 sh 'terraform apply -auto-approve'
             }
         }
     }
-
-    // ה-post נמצא כאן, והוא ירוץ בתוך ה-Context של ה-agent
+    
     post {
-        success {
-            echo 'Infrastructure deployed successfully!'
-        }
         failure {
-            echo 'Deployment failed. Check the logs above.'
+            echo 'Deployment failed. Please check if the Credentials ID matches in Jenkins.'
         }
     }
 }
