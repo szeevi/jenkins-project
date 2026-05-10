@@ -3,8 +3,7 @@ pipeline {
 
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
-        // שימוש בשיקוף קו נטוי כפול עבור הערות ב-Jenkinsfile
-        ANSIBLE_HOST_KEY_CHECKING = 'False'
+        // אנחנו משתמשים בהגדרה מה-ansible.cfg שלך, אז אין צורך ב-ANSIBLE_HOST_KEY_CHECKING כאן
     }
 
     stages {
@@ -33,12 +32,15 @@ pipeline {
         stage('Run Ansible Playbook') {
             steps {
                 script {
-                    // חילוץ ה-IP ויצירת קובץ אינוונטורי
+                    // 1. שליפת ה-IP מטרפורם
                     def instanceIp = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
-                    sh "echo '${instanceIp} ansible_user=ec2-user' > inventory.ini"
                     
-                    // הרצת הפלייבוק. שים לב שייתכן ותצטרך להוסיף --private-key אם אין מפתח מוגדר ב-Agent
-                    sh "ansible-playbook -i inventory.ini instance.yml"
+                    // 2. יצירת קובץ אינוונטורי זמני (כי ה-ansible.cfg שלך מצפה ל-aws_ec2.yaml כברירת מחדל)
+                    sh "echo '${instanceIp}' > host_to_provision.txt"
+                    
+                    // 3. הרצת הפלייבוק
+                    // אנחנו דורסים את ה-inventory של ה-cfg רק לרגע זה כדי להשתמש ב-IP החדש
+                    sh "ansible-playbook -i host_to_provision.txt instance.yml"
                 }
             }
         }
@@ -46,7 +48,8 @@ pipeline {
 
     post {
         always {
-            echo 'Finishing pipeline execution...'
+            echo 'Cleaning up...'
+            sh 'rm -f host_to_provision.txt'
         }
     }
 }
